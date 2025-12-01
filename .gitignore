@@ -37,10 +37,3 @@ src-tauri/.cargo/
 src-tauri/.pake/
 src-tauri/gen
 *.tmp
-
-# Test artifacts
-test-write-permission.tmp
-src-tauri/assets/com.pake.testapp.desktop
-src-tauri/assets/com.pake.urltest.desktop
-src-tauri/png/testapp_512.png
-src-tauri/png/urltest_512.png
