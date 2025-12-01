@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=testapp
+Comment=testapp
+Exec=pake-testapp
+Icon=testapp_512
+Categories=Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml_xml;
+StartupNotify=true

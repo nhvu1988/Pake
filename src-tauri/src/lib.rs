@@ -3,6 +3,7 @@ mod app;
 mod util;
 
 use tauri::Manager;
+use tauri_plugin_window_state::AppHandleExt;
 use tauri_plugin_window_state::Builder as WindowStatePlugin;
 use tauri_plugin_window_state::StateFlags;
 
@@ -101,6 +102,8 @@ pub fn run_app() {
                     });
                     api.prevent_close();
                 } else {
+                    // Save window state before exiting to preserve window position
+                    let _ = _window.app_handle().save_window_state(StateFlags::all());
                     // Exit app completely when hide_on_close is false
                     std::process::exit(0);
                 }
