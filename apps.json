@@ -3,7 +3,8 @@
     {
       "name": "Google Translate",
       "url": "https://translate.google.com/?sl=no&tl=vi",
-      "icon": "https://www.gstatic.com/translate/favicon.ico"
+      "icon": "https://www.gstatic.com/translate/favicon.ico",
+      "disabled": true
     },
     {
       "name": "Gmail",
@@ -13,16 +14,19 @@
     {
       "name": "Outlook",
       "url": "https://outlook.office.com/mail/",
-      "icon": "https://res.public.onecdn.static.microsoft/owamail/20250918044.09/resources/images/favicons/mail-seen.ico"
+      "icon": "https://res.public.onecdn.static.microsoft/owamail/20250918044.09/resources/images/favicons/mail-seen.ico",
+      "disabled": true
     },
     {
       "name": "Perplexity",
-      "url": "https://www.perplexity.ai/"
+      "url": "https://www.perplexity.ai/",
+      "disabled": true
     },
     {
       "name": "OneNote",
       "url": "https://onenote.cloud.microsoft/",
-      "icon": "https://res.cdn.office.net/files/fabric-cdn-prod_20251010.003/assets/brand-icons/product/favicon/onenote.ico"
+      "icon": "https://res.cdn.office.net/files/fabric-cdn-prod_20251010.003/assets/brand-icons/product/favicon/onenote.ico",
+      "disabled": true
     }
   ]
 }
