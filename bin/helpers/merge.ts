@@ -382,18 +382,6 @@ StartupNotify=true
   let tauriConf2 = JSON.parse(JSON.stringify(tauriConf));
   delete tauriConf2.pake;
 
-  // Convert version format for Windows (X.X.X-Y -> X.X.X.Y)
-  // WiX installer requires version in X.X.X.X format, not semantic versioning with hyphens
-  if (platform === 'win32') {
-    if (isFourPartVersion) {
-      // Use original 4-part version
-      tauriConf2.version = appVersion;
-    } else {
-      // Convert X.X.X-Y to X.X.X.Y
-      tauriConf2.version = normalizedVersion.replace(/-/g, '.');
-    }
-  }
-
   // delete tauriConf2.bundle;
   if (process.env.NODE_ENV === 'development') {
     tauriConf2.bundle = bundleConf.bundle;

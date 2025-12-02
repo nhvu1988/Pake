@@ -93,7 +93,7 @@ jobs:
           Write-Host "Building all apps from apps.json"
           $baseVersion = "${{ steps.pake_version.outputs.version }}"
           $buildCounter = "${{ steps.build_counter.outputs.result }}"
-          $semverVersion = "$baseVersion.$buildCounter"
+          $semverVersion = "$baseVersion-build$buildCounter"
           Write-Host "Version: $semverVersion"
 
           # Read apps.json
