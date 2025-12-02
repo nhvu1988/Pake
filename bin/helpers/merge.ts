@@ -103,7 +103,17 @@ export async function mergeConfig(
 
   tauriConf.productName = name;
   tauriConf.identifier = identifier;
-  tauriConf.version = appVersion;
+
+  // Handle version format - convert 4-part (X.X.X.Y) to 3-part semver (X.X.X-Y) for Tauri validation
+  let normalizedVersion = appVersion;
+  let isFourPartVersion = false;
+  const versionParts = appVersion.split('.');
+  if (versionParts.length === 4 && /^\d+$/.test(versionParts[3])) {
+    // Convert X.X.X.Y to X.X.X-Y for Tauri
+    normalizedVersion = `${versionParts[0]}.${versionParts[1]}.${versionParts[2]}-${versionParts[3]}`;
+    isFourPartVersion = true;
+  }
+  tauriConf.version = normalizedVersion;
 
   if (platform === 'linux') {
     tauriConf.mainBinaryName = `pake-${generateIdentifierSafeName(name)}`;
@@ -375,7 +385,13 @@ StartupNotify=true
   // Convert version format for Windows (X.X.X-Y -> X.X.X.Y)
   // WiX installer requires version in X.X.X.X format, not semantic versioning with hyphens
   if (platform === 'win32') {
-    tauriConf2.version = appVersion.replace(/-/g, '.');
+    if (isFourPartVersion) {
+      // Use original 4-part version
+      tauriConf2.version = appVersion;
+    } else {
+      // Convert X.X.X-Y to X.X.X.Y
+      tauriConf2.version = normalizedVersion.replace(/-/g, '.');
+    }
   }
 
   // delete tauriConf2.bundle;

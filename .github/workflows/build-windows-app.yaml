@@ -91,8 +91,10 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Building all apps from apps.json"
-          $version = "${{ steps.pake_version.outputs.version }}-${{ steps.build_counter.outputs.result }}"
-          Write-Host "Version: $version"
+          $baseVersion = "${{ steps.pake_version.outputs.version }}"
+          $buildCounter = "${{ steps.build_counter.outputs.result }}"
+          $semverVersion = "$baseVersion.$buildCounter"
+          Write-Host "Version: $semverVersion"
 
           # Read apps.json
           $appsData = Get-Content -Path 'apps.json' -Raw | ConvertFrom-Json
@@ -112,9 +114,15 @@ jobs:
             $height = if ($app.height) { $app.height } else { 780 }
             $fullscreen = if ($app.fullscreen) { $app.fullscreen } else { $false }
             $userAgent = $app.user_agent
+            $disabled = if ($app.disabled) { $app.disabled } else { $false }
+
+            if ($disabled -eq $true) {
+              Write-Host "Skipping $name (disabled)"
+              continue
+            }
 
             Write-Host "Building $name..."
-            $args = @('dist/cli.js', $url, '--name', $name, '--width', $width, '--height', $height, '--app-version', $version, '--enable-drag-drop', '--keep-binary')
+            $args = @('dist/cli.js', $url, '--name', $name, '--width', $width, '--height', $height, '--app-version', $semverVersion, '--enable-drag-drop', '--keep-binary')
             if ($fullscreen -eq $true) { $args += '--fullscreen' }
             if ($userAgent) { $args += @('--user-agent', $userAgent) }
             if ($icon) { $args += @('--icon', $icon) }
@@ -125,7 +133,7 @@ jobs:
             # find newest exe
             $exe = Get-ChildItem -Path '.' -Filter '*.exe' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
             if (-not $exe) { Write-Error "No .exe produced for $name"; exit 1 }
-            $destName = "$name $version.exe"
+            $destName = "$name $semverVersion.exe"
             Copy-Item -Path $exe.FullName -Destination "output\\$destName" -Force
             Write-Host "Copied $($exe.Name) -> output\\$destName"
             Remove-Item -Path $exe.FullName -Force
