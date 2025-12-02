@@ -103,14 +103,7 @@ export async function mergeConfig(
 
   tauriConf.productName = name;
   tauriConf.identifier = identifier;
-
-  // Convert version format for Windows (X.X.X-Y -> X.X.X.Y)
-  // WiX installer requires version in X.X.X.X format, not semantic versioning with hyphens
-  if (platform === 'win32') {
-    tauriConf.version = appVersion.replace(/-/g, '.');
-  } else {
-    tauriConf.version = appVersion;
-  }
+  tauriConf.version = appVersion;
 
   if (platform === 'linux') {
     tauriConf.mainBinaryName = `pake-${generateIdentifierSafeName(name)}`;
@@ -378,6 +371,12 @@ StartupNotify=true
 
   let tauriConf2 = JSON.parse(JSON.stringify(tauriConf));
   delete tauriConf2.pake;
+
+  // Convert version format for Windows (X.X.X-Y -> X.X.X.Y)
+  // WiX installer requires version in X.X.X.X format, not semantic versioning with hyphens
+  if (platform === 'win32') {
+    tauriConf2.version = appVersion.replace(/-/g, '.');
+  }
 
   // delete tauriConf2.bundle;
   if (process.env.NODE_ENV === 'development') {
