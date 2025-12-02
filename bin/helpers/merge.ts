@@ -103,17 +103,7 @@ export async function mergeConfig(
 
   tauriConf.productName = name;
   tauriConf.identifier = identifier;
-
-  // Handle version format - convert 4-part (X.X.X.Y) to 3-part semver (X.X.X-Y) for Tauri validation
-  let normalizedVersion = appVersion;
-  let isFourPartVersion = false;
-  const versionParts = appVersion.split('.');
-  if (versionParts.length === 4 && /^\d+$/.test(versionParts[3])) {
-    // Convert X.X.X.Y to X.X.X-Y for Tauri
-    normalizedVersion = `${versionParts[0]}.${versionParts[1]}.${versionParts[2]}-${versionParts[3]}`;
-    isFourPartVersion = true;
-  }
-  tauriConf.version = normalizedVersion;
+  tauriConf.version = appVersion;
 
   if (platform === 'linux') {
     tauriConf.mainBinaryName = `pake-${generateIdentifierSafeName(name)}`;
