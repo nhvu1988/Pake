@@ -1,7 +1,8 @@
 use crate::app::config::PakeConfig;
+use crate::app::url_tracker::{restore_last_url, save_last_url};
 use crate::util::get_data_dir;
 use std::{path::PathBuf, str::FromStr};
-use tauri::{App, Config, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{App, Config, Manager, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 #[cfg(target_os = "macos")]
 use tauri::{Theme, TitleBarStyle};
@@ -66,6 +67,17 @@ pub fn set_window(app: &mut App, config: &PakeConfig, tauri_config: &Config) -> 
 
     if !window_config.enable_drag_drop {
         window_builder = window_builder.disable_drag_drop_handler();
+    }
+
+    // Track navigation to persist the last visited URL when enabled
+    if window_config.open_last_url {
+        let app_handle = app.app_handle().clone();
+        window_builder = window_builder.on_navigation(move |url| {
+            #[cfg(debug_assertions)]
+            println!("on_navigation: {}", url);
+            save_last_url(&app_handle, url.as_str());
+            true
+        });
     }
 
     // Add initialization scripts
@@ -162,5 +174,12 @@ pub fn set_window(app: &mut App, config: &PakeConfig, tauri_config: &Config) -> 
         println!("Proxy configured: {}", config.proxy_url);
     }
 
-    window_builder.build().expect("Failed to build window")
+    let window = window_builder.build().expect("Failed to build window");
+
+    // Restore last visited URL after window creation if enabled
+    if window_config.open_last_url {
+        restore_last_url(&window, &window_config.url);
+    }
+
+    window
 }

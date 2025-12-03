@@ -99,6 +99,9 @@ export interface PakeCliOptions {
 
   // Force navigation to stay inside the Pake window even for external links
   forceInternalNavigation: boolean;
+
+  // Restore last visited URL on app startup, default false
+  openLastUrl: boolean;
 }
 
 export interface PakeAppOptions extends PakeCliOptions {

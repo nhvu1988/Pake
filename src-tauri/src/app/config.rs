@@ -22,6 +22,8 @@ pub struct WindowConfig {
     pub start_to_tray: bool,
     #[serde(default)]
     pub force_internal_navigation: bool,
+    #[serde(default)]
+    pub open_last_url: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

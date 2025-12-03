@@ -74,6 +74,7 @@ export async function mergeConfig(
     multiInstance,
     startToTray,
     forceInternalNavigation,
+    openLastUrl,
   } = options;
 
   const { platform } = process;
@@ -98,6 +99,7 @@ export async function mergeConfig(
     enable_drag_drop: enableDragDrop,
     start_to_tray: startToTray && showSystemTray,
     force_internal_navigation: forceInternalNavigation,
+    open_last_url: openLastUrl,
   };
   Object.assign(tauriConf.pake.windows[0], { url, ...tauriConfWindowOptions });
 
