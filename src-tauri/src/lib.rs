@@ -11,7 +11,7 @@ use tauri_plugin_window_state::StateFlags;
 use std::time::Duration;
 
 use app::{
-    invoke::{download_file, download_file_by_binary, send_notification},
+    invoke::{download_file, download_file_by_binary, save_last_url, send_notification},
     setup::{set_global_shortcut, set_system_tray},
     window::set_window,
 };
@@ -26,6 +26,7 @@ pub fn run_app() {
     let activation_shortcut = pake_config.windows[0].activation_shortcut.clone();
     let init_fullscreen = pake_config.windows[0].fullscreen;
     let start_to_tray = pake_config.windows[0].start_to_tray && show_system_tray; // Only valid when tray is enabled
+    let open_last_url = pake_config.windows[0].open_last_url;
     let multi_instance = pake_config.multi_instance;
 
     let window_state_plugin = WindowStatePlugin::default()
@@ -60,6 +61,7 @@ pub fn run_app() {
         .invoke_handler(tauri::generate_handler![
             download_file,
             download_file_by_binary,
+            save_last_url,
             send_notification,
         ])
         .setup(move |app| {
@@ -86,6 +88,25 @@ pub fn run_app() {
         })
         .on_window_event(move |_window, _event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = _event {
+                // Save current URL before closing if enabled
+                if open_last_url {
+                    if let Some(webview_window) = _window.app_handle().get_webview_window("pake") {
+                        let _ = webview_window.eval(r#"
+                            (() => {
+                                try {
+                                    const href = window.location?.href;
+                                    const invoke = window.__TAURI__?.core?.invoke;
+                                    if (href && invoke) {
+                                        invoke('save_last_url', { url: href }).catch(() => {});
+                                    }
+                                } catch (_) {
+                                    // ignore if the page does not expose location
+                                }
+                            })();
+                        "#);
+                    }
+                }
+
                 if hide_on_close {
                     // Hide window when hide_on_close is enabled (regardless of tray status)
                     let window = _window.clone();

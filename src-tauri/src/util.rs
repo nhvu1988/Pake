@@ -1,7 +1,8 @@
 use crate::app::config::PakeConfig;
 use std::env;
+use std::fs;
 use std::path::PathBuf;
-use tauri::{AppHandle, Config, Manager, WebviewWindow};
+use tauri::{AppHandle, Config, Manager, Url, WebviewWindow};
 
 pub fn get_pake_config() -> (PakeConfig, Config) {
     #[cfg(feature = "cli-build")]
@@ -36,6 +37,40 @@ pub fn get_data_dir(app: &AppHandle, package_name: String) -> PathBuf {
                 .unwrap_or_else(|_| panic!("Can't create dir {}", data_dir.display()));
         }
         data_dir
+    }
+}
+
+fn last_url_path(app: &AppHandle) -> PathBuf {
+    let package_name = app
+        .config()
+        .product_name
+        .clone()
+        .unwrap_or_else(|| "pake".to_string());
+    get_data_dir(app, package_name).join("last_url.txt")
+}
+
+pub fn persist_last_url(app: &AppHandle, url: &str) -> Result<(), String> {
+    let parsed = Url::parse(url).map_err(|e| e.to_string())?;
+
+    match parsed.scheme() {
+        "http" | "https" => fs::write(last_url_path(app), parsed.to_string())
+            .map_err(|e| e.to_string()),
+        _ => Ok(()),
+    }
+}
+
+pub fn read_last_url(app: &AppHandle) -> Option<String> {
+    let path = last_url_path(app);
+    let content = fs::read_to_string(path).ok()?;
+    let trimmed = content.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let parsed = Url::parse(trimmed).ok()?;
+    match parsed.scheme() {
+        "http" | "https" => Some(parsed.to_string()),
+        _ => None,
     }
 }
 
