@@ -899,39 +899,6 @@ function setDefaultZoom() {
   }
 }
 
-function saveCurrentUrl() {
-  const currentUrl = window.location.href;
-
-  // Don't save special URLs
-  if (currentUrl.startsWith("about:") || currentUrl.startsWith("blob:") || currentUrl.startsWith("data:")) {
-    return;
-  }
-
-  window.localStorage.setItem("lastVisitedUrl", currentUrl);
-}
-
-function restoreLastUrl() {
-  const lastUrl = window.localStorage.getItem("lastVisitedUrl");
-
-  if (!lastUrl) {
-    return; // No saved URL to restore
-  }
-
-  const currentUrl = window.location.href;
-
-  // Only restore if the current URL is the app's default/entry URL
-  // and it's different from the last saved URL
-  // This prevents restoring to the old URL on first app startup
-  const appEntryUrl = window.location.origin + window.location.pathname;
-
-  if (currentUrl === appEntryUrl && lastUrl !== appEntryUrl && !lastUrl.startsWith("about:")) {
-    // Use a small delay to ensure page is ready before navigating
-    setTimeout(() => {
-      window.location.href = lastUrl;
-    }, 100);
-  }
-}
-
 function getFilenameFromUrl(url) {
   try {
     const urlPath = new URL(url).pathname;
