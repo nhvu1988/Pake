@@ -50,36 +50,55 @@ fn get_last_url_path(app: &AppHandle) -> PathBuf {
 }
 
 pub fn save_last_url(app: &AppHandle, url: &str) -> Result<(), String> {
+    println!("[save_last_url] Attempting to save URL: {}", url);
+
     // Only save http/https URLs
     if !url.starts_with("http://") && !url.starts_with("https://") {
+        println!("[save_last_url] Skipping non-web URL: {}", url);
         return Ok(()); // Silently ignore non-web URLs
     }
 
     let path = get_last_url_path(app);
-    fs::write(&path, url).map_err(|e| e.to_string())?;
+    println!("[save_last_url] Writing to path: {}", path.display());
 
-    #[cfg(debug_assertions)]
-    println!("Saved last URL to {}: {}", path.display(), url);
+    fs::write(&path, url).map_err(|e| {
+        let err_msg = format!("Failed to write URL file: {}", e);
+        println!("[save_last_url] ERROR: {}", err_msg);
+        err_msg
+    })?;
 
+    println!("[save_last_url] Successfully saved URL to {}", path.display());
     Ok(())
 }
 
 pub fn load_last_url(app: &AppHandle) -> Option<String> {
     let path = get_last_url_path(app);
-    let content = fs::read_to_string(&path).ok()?;
+    println!("[load_last_url] Attempting to load from: {}", path.display());
+
+    let content = match fs::read_to_string(&path) {
+        Ok(c) => {
+            println!("[load_last_url] File content: '{}'", c);
+            c
+        }
+        Err(e) => {
+            println!("[load_last_url] Failed to read file: {}", e);
+            return None;
+        }
+    };
+
     let trimmed = content.trim();
 
     if trimmed.is_empty() {
+        println!("[load_last_url] File is empty");
         return None;
     }
 
     // Only return http/https URLs
     if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-        #[cfg(debug_assertions)]
-        println!("Loaded last URL from {}: {}", path.display(), trimmed);
-
+        println!("[load_last_url] Successfully loaded URL: {}", trimmed);
         Some(trimmed.to_string())
     } else {
+        println!("[load_last_url] Invalid URL scheme: {}", trimmed);
         None
     }
 }

@@ -35,17 +35,21 @@ pub fn set_window(app: &mut App, config: &PakeConfig, tauri_config: &Config) -> 
     let user_agent = config.user_agent.get();
 
     // Determine the URL to open - use last visited URL if feature is enabled
+    println!("[set_window] open_last_url: {}, url_type: {}", window_config.open_last_url, window_config.url_type);
+
     let url_string = if window_config.open_last_url && window_config.url_type == "web" {
+        println!("[set_window] Attempting to load last URL...");
         if let Some(last_url) = load_last_url(&app_handle) {
+            println!("[set_window] Using last URL: {}", last_url);
             last_url
         } else {
+            println!("[set_window] No last URL found, using config URL: {}", window_config.url);
             window_config.url.clone()
         }
     } else {
+        println!("[set_window] Using config URL: {}", window_config.url);
         window_config.url.clone()
-    };
-
-    let url = match window_config.url_type.as_str() {
+    };    let url = match window_config.url_type.as_str() {
         "web" => WebviewUrl::App(url_string.parse().unwrap()),
         "local" => WebviewUrl::App(PathBuf::from(&url_string)),
         _ => panic!("url type can only be web or local"),
