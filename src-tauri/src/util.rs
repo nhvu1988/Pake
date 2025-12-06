@@ -49,26 +49,16 @@ fn get_last_url_path(app: &AppHandle) -> PathBuf {
     get_data_dir(app, package_name).join("last_url.txt")
 }
 
-pub fn save_last_url(app: &AppHandle, url: &str) -> Result<(), String> {
-    println!("[save_last_url] Attempting to save URL: {}", url);
-
-    // Only save http/https URLs
+pub fn save_last_url(app_handle: &AppHandle, url: &str) -> Result<(), String> {
+    // Only save web URLs (http/https)
     if !url.starts_with("http://") && !url.starts_with("https://") {
-        println!("[save_last_url] Skipping non-web URL: {}", url);
-        return Ok(()); // Silently ignore non-web URLs
+        return Ok(());
     }
 
-    let path = get_last_url_path(app);
-    println!("[save_last_url] Writing to path: {}", path.display());
+    let path = app_handle.path().app_cache_dir().unwrap().join("last_url.txt");
 
-    fs::write(&path, url).map_err(|e| {
-        let err_msg = format!("Failed to write URL file: {}", e);
-        println!("[save_last_url] ERROR: {}", err_msg);
-        err_msg
-    })?;
-
-    println!("[save_last_url] Successfully saved URL to {}", path.display());
-    Ok(())
+    std::fs::write(&path, url)
+        .map_err(|e| format!("Failed to save URL: {}", e))
 }
 
 pub fn load_last_url(app: &AppHandle) -> Option<String> {

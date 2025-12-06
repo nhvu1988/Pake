@@ -90,27 +90,17 @@ pub fn run_app() {
             if let tauri::WindowEvent::CloseRequested { api, .. } = _event {
                 // Save current URL before closing if enabled
                 if open_last_url {
-                    println!("[on_window_event] CloseRequested: open_last_url is enabled");
                     if let Some(window) = _window.app_handle().get_webview_window("pake") {
-                        println!("[on_window_event] Got window handle, attempting to save URL");
                         let app_handle = _window.app_handle().clone();
                         tauri::async_runtime::block_on(async move {
                             match get_current_url(window).await {
                                 Ok(url) => {
-                                    println!("[on_window_event] Retrieved URL: {}", url);
-                                    match save_last_url(&app_handle, &url) {
-                                        Ok(_) => println!("[on_window_event] URL saved successfully"),
-                                        Err(e) => println!("[on_window_event] Failed to save URL: {}", e),
-                                    }
+                                    let _ = save_last_url(&app_handle, &url);
                                 }
-                                Err(e) => println!("[on_window_event] Failed to get current URL: {}", e),
+                                Err(_) => {}
                             }
                         });
-                    } else {
-                        println!("[on_window_event] Failed to get window handle");
                     }
-                } else {
-                    println!("[on_window_event] CloseRequested: open_last_url is disabled");
                 }
 
                 if hide_on_close {
@@ -129,32 +119,13 @@ pub fn run_app() {
                     });
                     api.prevent_close();
                 } else {
-                    // Debug mode: hide window instead of closing to allow console inspection
-                    #[cfg(debug_assertions)]
-                    {
-                        println!("[on_window_event] Debug mode: hiding window instead of closing");
-                        if let Some(win) = _window.app_handle().get_webview_window("pake") {
-                            let _ = win.open_devtools();
-                        }
-                        let window = _window.clone();
-                        tauri::async_runtime::spawn(async move {
-                            window.hide().unwrap();
-                        });
-                        api.prevent_close();
-                    }
-
-                    // Release mode: exit app completely
-                    #[cfg(not(debug_assertions))]
-                    {
-                        println!("[on_window_event] Release mode: exiting app");
-                        // Save window state before exiting to preserve window position
-                        _window
-                            .app_handle()
-                            .save_window_state(StateFlags::all())
-                            .ok();
-                        // Exit app completely when hide_on_close is false
-                        std::process::exit(0);
-                    }
+                    // Save window state before exiting to preserve window position
+                    _window
+                        .app_handle()
+                        .save_window_state(StateFlags::all())
+                        .ok();
+                    // Exit app completely when hide_on_close is false
+                    std::process::exit(0);
                 }
             }
         })

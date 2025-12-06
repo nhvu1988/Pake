@@ -116,18 +116,9 @@ pub fn send_notification(app: AppHandle, params: NotificationParams) -> Result<(
 
 #[command]
 pub async fn get_current_url(window: WebviewWindow) -> Result<String, String> {
-    println!("[get_current_url] Starting URL retrieval");
-
     // Use Tauri's built-in url() method to get the current webview URL
     match window.url() {
-        Ok(url) => {
-            let url_string = url.to_string();
-            println!("[get_current_url] Success, got URL: {}", url_string);
-            Ok(url_string)
-        }
-        Err(e) => {
-            println!("[get_current_url] Failed to get URL: {}", e);
-            Err(format!("Could not retrieve URL from window: {}", e))
-        }
+        Ok(url) => Ok(url.to_string()),
+        Err(e) => Err(format!("Could not retrieve URL from window: {}", e))
     }
 }
