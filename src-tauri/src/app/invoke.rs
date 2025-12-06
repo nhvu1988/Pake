@@ -1,5 +1,5 @@
 use crate::util::{
-    check_file_or_append, get_download_message_with_lang, persist_last_url, show_toast, MessageType,
+    check_file_or_append, get_download_message_with_lang, show_toast, MessageType,
 };
 use std::fs::{self, File};
 use std::io::Write;
@@ -112,9 +112,4 @@ pub fn send_notification(app: AppHandle, params: NotificationParams) -> Result<(
         .show()
         .unwrap();
     Ok(())
-}
-
-#[command]
-pub fn save_last_url(app: AppHandle, url: String) -> Result<(), String> {
-    persist_last_url(&app, &url)
 }
