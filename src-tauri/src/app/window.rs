@@ -1,5 +1,5 @@
 use crate::app::config::PakeConfig;
-use crate::util::get_data_dir;
+use crate::util::{get_data_dir, load_last_url};
 use std::{path::PathBuf, str::FromStr};
 use tauri::{App, Config, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
@@ -34,9 +34,20 @@ pub fn set_window(app: &mut App, config: &PakeConfig, tauri_config: &Config) -> 
 
     let user_agent = config.user_agent.get();
 
+    // Determine the URL to open - use last visited URL if feature is enabled
+    let url_string = if window_config.open_last_url && window_config.url_type == "web" {
+        if let Some(last_url) = load_last_url(&app_handle) {
+            last_url
+        } else {
+            window_config.url.clone()
+        }
+    } else {
+        window_config.url.clone()
+    };
+
     let url = match window_config.url_type.as_str() {
-        "web" => WebviewUrl::App(window_config.url.parse().unwrap()),
-        "local" => WebviewUrl::App(PathBuf::from(&window_config.url)),
+        "web" => WebviewUrl::App(url_string.parse().unwrap()),
+        "local" => WebviewUrl::App(PathBuf::from(&url_string)),
         _ => panic!("url type can only be web or local"),
     };
 

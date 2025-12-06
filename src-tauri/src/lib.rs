@@ -11,11 +11,11 @@ use tauri_plugin_window_state::StateFlags;
 use std::time::Duration;
 
 use app::{
-    invoke::{download_file, download_file_by_binary, send_notification},
+    invoke::{download_file, download_file_by_binary, get_current_url, send_notification},
     setup::{set_global_shortcut, set_system_tray},
     window::set_window,
 };
-use util::get_pake_config;
+use util::{get_pake_config, save_last_url};
 
 pub fn run_app() {
     let (pake_config, tauri_config) = get_pake_config();
@@ -26,6 +26,7 @@ pub fn run_app() {
     let activation_shortcut = pake_config.windows[0].activation_shortcut.clone();
     let init_fullscreen = pake_config.windows[0].fullscreen;
     let start_to_tray = pake_config.windows[0].start_to_tray && show_system_tray; // Only valid when tray is enabled
+    let open_last_url = pake_config.windows[0].open_last_url;
     let multi_instance = pake_config.multi_instance;
 
     let window_state_plugin = WindowStatePlugin::default()
@@ -60,6 +61,7 @@ pub fn run_app() {
         .invoke_handler(tauri::generate_handler![
             download_file,
             download_file_by_binary,
+            get_current_url,
             send_notification,
         ])
         .setup(move |app| {
@@ -86,6 +88,18 @@ pub fn run_app() {
         })
         .on_window_event(move |_window, _event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = _event {
+                // Save current URL before closing if enabled
+                if open_last_url {
+                    if let Some(window) = _window.app_handle().get_webview_window("pake") {
+                        let app_handle = _window.app_handle().clone();
+                        tauri::async_runtime::block_on(async move {
+                            if let Ok(url) = get_current_url(window).await {
+                                let _ = save_last_url(&app_handle, &url);
+                            }
+                        });
+                    }
+                }
+
                 if hide_on_close {
                     // Hide window when hide_on_close is enabled (regardless of tray status)
                     let window = _window.clone();

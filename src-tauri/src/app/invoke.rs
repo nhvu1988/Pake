@@ -113,3 +113,36 @@ pub fn send_notification(app: AppHandle, params: NotificationParams) -> Result<(
         .unwrap();
     Ok(())
 }
+
+#[command]
+pub async fn get_current_url(window: WebviewWindow) -> Result<String, String> {
+    // Execute JavaScript to get the current URL
+    // We'll use the title trick: temporarily set title to URL, read it, restore it
+    let script = r#"
+        (function() {
+            try {
+                const url = window.location.href;
+                const oldTitle = document.title;
+                document.title = '__PAKE_URL__:' + url;
+                setTimeout(() => { document.title = oldTitle; }, 10);
+                return url;
+            } catch(e) {
+                return null;
+            }
+        })();
+    "#;
+
+    window.eval(script).map_err(|e| format!("Failed to execute script: {}", e))?;
+
+    // Give it a moment for the title to update
+    tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
+
+    // Read the title
+    if let Ok(title) = window.title() {
+        if let Some(url) = title.strip_prefix("__PAKE_URL__:") {
+            return Ok(url.to_string());
+        }
+    }
+
+    Err("Failed to retrieve URL from window".to_string())
+}
