@@ -148,3 +148,12 @@ pub fn clear_cache_and_restart(app: AppHandle) -> Result<(), String> {
         Err("Main window not found".to_string())
     }
 }
+
+#[command]
+pub async fn get_current_url(window: WebviewWindow) -> Result<String, String> {
+    // Use Tauri's built-in url() method to get the current webview URL
+    match window.url() {
+        Ok(url) => Ok(url.to_string()),
+        Err(e) => Err(format!("Could not retrieve URL from window: {}", e))
+    }
+}

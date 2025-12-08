@@ -1,5 +1,6 @@
 use crate::app::config::PakeConfig;
 use std::env;
+use std::fs;
 use std::path::PathBuf;
 use tauri::{AppHandle, Config, Manager, WebviewWindow};
 
@@ -36,6 +37,50 @@ pub fn get_data_dir(app: &AppHandle, package_name: String) -> PathBuf {
                 .unwrap_or_else(|_| panic!("Can't create dir {}", data_dir.display()));
         }
         data_dir
+    }
+}
+
+fn get_last_url_path(app: &AppHandle) -> PathBuf {
+    let package_name = app
+        .config()
+        .product_name
+        .clone()
+        .unwrap_or_else(|| "pake".to_string());
+    get_data_dir(app, package_name).join("last_url.txt")
+}
+
+pub fn save_last_url(app_handle: &AppHandle, url: &str) -> Result<(), String> {
+    // Only save web URLs (http/https)
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return Ok(());
+    }
+
+    // Use the same path as load_last_url (config_dir/package_name/last_url.txt)
+    let path = get_last_url_path(app_handle);
+
+    std::fs::write(&path, url)
+        .map_err(|e| format!("Failed to save URL: {}", e))
+}
+
+pub fn load_last_url(app: &AppHandle) -> Option<String> {
+    let path = get_last_url_path(app);
+
+    let content = match fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return None,
+    };
+
+    let trimmed = content.trim();
+
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // Only return http/https URLs
+    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+        Some(trimmed.to_string())
+    } else {
+        None
     }
 }
 

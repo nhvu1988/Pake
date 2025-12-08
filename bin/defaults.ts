@@ -35,6 +35,7 @@ export const DEFAULT_PAKE_OPTIONS: PakeCliOptions = {
   minWidth: 0,
   minHeight: 0,
   ignoreCertificateErrors: false,
+  openLastUrl: false,
 };
 
 // Just for cli development

@@ -183,6 +183,11 @@ program
       .hideHelp(),
   )
   .addOption(
+    new Option('--open-last-url', 'Restore last visited URL on app startup')
+      .default(DEFAULT.openLastUrl)
+      .hideHelp(),
+  )
+  .addOption(
     new Option('--installer-language <string>', 'Installer language')
       .default(DEFAULT.installerLanguage)
       .hideHelp(),

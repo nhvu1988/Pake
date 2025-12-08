@@ -111,6 +111,9 @@ export interface PakeCliOptions {
 
   // Ignore certificate errors (for self-signed certs), default false
   ignoreCertificateErrors: boolean;
+
+  // Restore last visited URL on app startup, default false
+  openLastUrl: boolean;
 }
 
 export interface PakeAppOptions extends PakeCliOptions {

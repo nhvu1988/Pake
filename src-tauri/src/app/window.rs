@@ -1,5 +1,5 @@
 use crate::app::config::PakeConfig;
-use crate::util::get_data_dir;
+use crate::util::{get_data_dir, load_last_url};
 use std::{path::PathBuf, str::FromStr};
 use tauri::{App, Config, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
@@ -24,7 +24,8 @@ fn build_proxy_browser_arg(url: &Url) -> Option<String> {
 
 pub fn set_window(app: &mut App, config: &PakeConfig, tauri_config: &Config) -> WebviewWindow {
     let package_name = tauri_config.clone().product_name.unwrap();
-    let _data_dir = get_data_dir(app.handle(), package_name);
+    let app_handle = app.handle();
+    let _data_dir = get_data_dir(&app_handle, package_name);
 
     let window_config = config
         .windows
@@ -33,9 +34,20 @@ pub fn set_window(app: &mut App, config: &PakeConfig, tauri_config: &Config) -> 
 
     let user_agent = config.user_agent.get();
 
+    // Determine the URL to open - use last visited URL if feature is enabled
+    let url_string = if window_config.open_last_url && window_config.url_type == "web" {
+        if let Some(last_url) = load_last_url(&app_handle) {
+            last_url
+        } else {
+            window_config.url.clone()
+        }
+    } else {
+        window_config.url.clone()
+    };
+
     let url = match window_config.url_type.as_str() {
-        "web" => WebviewUrl::App(window_config.url.parse().unwrap()),
-        "local" => WebviewUrl::App(PathBuf::from(&window_config.url)),
+        "web" => WebviewUrl::App(url_string.parse().unwrap()),
+        "local" => WebviewUrl::App(PathBuf::from(&url_string)),
         _ => panic!("url type can only be web or local"),
     };
 
@@ -191,8 +203,6 @@ pub fn set_window(app: &mut App, config: &PakeConfig, tauri_config: &Config) -> 
 
     if let Some(proxy_url) = parsed_proxy_url {
         window_builder = window_builder.proxy_url(proxy_url);
-        #[cfg(debug_assertions)]
-        println!("Proxy configured: {}", config.proxy_url);
     }
 
     // Allow navigation to OAuth/authentication domains

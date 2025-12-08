@@ -15,13 +15,13 @@ use tauri_plugin_opener::OpenerExt; // Add this
 
 use app::{
     invoke::{
-        clear_cache_and_restart, download_file, download_file_by_binary, send_notification,
+        clear_cache_and_restart, download_file, download_file_by_binary, get_current_url, send_notification,
         update_theme_mode,
     },
     setup::{set_global_shortcut, set_system_tray},
     window::set_window,
 };
-use util::get_pake_config;
+use util::{get_pake_config, save_last_url};
 
 pub fn run_app() {
     let (pake_config, tauri_config) = get_pake_config();
@@ -32,6 +32,7 @@ pub fn run_app() {
     let activation_shortcut = pake_config.windows[0].activation_shortcut.clone();
     let init_fullscreen = pake_config.windows[0].fullscreen;
     let start_to_tray = pake_config.windows[0].start_to_tray && show_system_tray; // Only valid when tray is enabled
+    let open_last_url = pake_config.windows[0].open_last_url;
     let multi_instance = pake_config.multi_instance;
 
     let window_state_plugin = WindowStatePlugin::default()
@@ -67,6 +68,7 @@ pub fn run_app() {
         .invoke_handler(tauri::generate_handler![
             download_file,
             download_file_by_binary,
+            get_current_url,
             send_notification,
             update_theme_mode,
             clear_cache_and_restart,
@@ -331,6 +333,21 @@ pub fn run_app() {
         })
         .on_window_event(move |_window, _event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = _event {
+                // Save current URL before closing if enabled
+                if open_last_url {
+                    if let Some(window) = _window.app_handle().get_webview_window("pake") {
+                        let app_handle = _window.app_handle().clone();
+                        tauri::async_runtime::block_on(async move {
+                            match get_current_url(window).await {
+                                Ok(url) => {
+                                    let _ = save_last_url(&app_handle, &url);
+                                }
+                                Err(_) => {}
+                            }
+                        });
+                    }
+                }
+
                 if hide_on_close {
                     // Hide window when hide_on_close is enabled (regardless of tray status)
                     let window = _window.clone();
@@ -347,13 +364,30 @@ pub fn run_app() {
                     });
                     api.prevent_close();
                 } else {
-                    // Save window state before exiting to preserve window position
-                    _window
-                        .app_handle()
-                        .save_window_state(StateFlags::all())
-                        .ok();
-                    // Exit app completely when hide_on_close is false
-                    std::process::exit(0);
+                    // Debug mode: hide window instead of closing to allow console inspection
+                    #[cfg(debug_assertions)]
+                    {
+                        if let Some(win) = _window.app_handle().get_webview_window("pake") {
+                            let _ = win.open_devtools();
+                        }
+                        let window = _window.clone();
+                        tauri::async_runtime::spawn(async move {
+                            window.hide().unwrap();
+                        });
+                        api.prevent_close();
+                    }
+
+                    // Release mode: exit app completely
+                    #[cfg(not(debug_assertions))]
+                    {
+                        // Save window state before exiting to preserve window position
+                        _window
+                            .app_handle()
+                            .save_window_state(StateFlags::all())
+                            .ok();
+                        // Exit app completely when hide_on_close is false
+                        std::process::exit(0);
+                    }
                 }
             }
         })
