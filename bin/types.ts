@@ -33,6 +33,9 @@ export interface PakeCliOptions {
   // Enable windows always on top, default false
   alwaysOnTop: boolean;
 
+  // Enable menu bar, default false
+  enableMenuBar: boolean;
+
   // App version, the same as package.json version, default 1.0.0
   appVersion: string;
 

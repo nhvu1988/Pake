@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 pub struct WindowConfig {
     pub url: String,
     pub hide_title_bar: bool,
+    #[serde(default)]
+    pub enable_menu_bar: bool,
     pub fullscreen: bool,
     pub maximize: bool,
     pub width: f64,

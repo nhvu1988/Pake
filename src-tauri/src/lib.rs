@@ -75,6 +75,7 @@ pub fn run_app() {
         ])
         .setup(move |app| {
             // --- Menu Construction Start ---
+            if pake_config.windows[0].enable_menu_bar {
             let pake_version = env!("CARGO_PKG_VERSION");
             let pake_menu_item_title = format!("Built with Pake V{}", pake_version);
 
@@ -308,6 +309,7 @@ pub fn run_app() {
                     _ => {}
                 }
             });
+            }
             // --- Menu Construction End ---
 
             let window = set_window(app, &pake_config, &tauri_config);

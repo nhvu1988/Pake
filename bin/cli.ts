@@ -48,6 +48,7 @@ program
   .option('--use-local-file', 'Use local file packaging', DEFAULT.useLocalFile)
   .option('--fullscreen', 'Start in full screen', DEFAULT.fullscreen)
   .option('--hide-title-bar', 'For Mac, hide title bar', DEFAULT.hideTitleBar)
+  .option('--enable-menu-bar', 'Enable menu bar', DEFAULT.enableMenuBar)
   .option('--multi-arch', 'For Mac, both Intel and M1', DEFAULT.multiArch)
   .option(
     '--inject <files>',

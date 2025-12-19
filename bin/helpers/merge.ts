@@ -79,6 +79,7 @@ export async function mergeConfig(
     minHeight,
     ignoreCertificateErrors,
     openLastUrl,
+    enableMenuBar,
   } = options;
 
   const { platform } = process;
@@ -92,6 +93,7 @@ export async function mergeConfig(
     maximize,
     resizable,
     hide_title_bar: hideTitleBar,
+    enable_menu_bar: enableMenuBar,
     activation_shortcut: activationShortcut,
     always_on_top: alwaysOnTop,
     dark_mode: darkMode,
