@@ -50,6 +50,9 @@ export const DEFAULT_PAKE_OPTIONS: PakeCliOptions = {
   minHeight: 0,
   ignoreCertificateErrors: false,
   newWindow: false,
+  install: false,
+  camera: false,
+  microphone: false,
 };
 
 // Just for cli development

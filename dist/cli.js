@@ -22,7 +22,7 @@ import * as psl from 'psl';
 import { InvalidArgumentError, program as program$1, Option } from 'commander';
 
 var name = "pake-cli";
-var version = "3.10.0";
+var version = "3.10.1";
 var description = "🤱🏻 Turn any webpage into a desktop app with one command. 🤱🏻 一键打包网页生成轻量桌面应用。";
 var engines = {
 	node: ">=18.0.0"
@@ -171,14 +171,29 @@ let tauriConfig = {
     pake: pakeConf,
 };
 
-// Generates an identifier based on the given URL.
-function getIdentifier(url) {
+// Generates a stable identifier based on the app URL (and optionally name).
+// When name is provided it is included in the hash so two apps wrapping
+// the same URL can coexist. Omitting name preserves backward compatibility
+// with identifiers generated before V3.10.1.
+function getIdentifier(url, name) {
+    const hashInput = name ? `${url}::${name}` : url;
     const postFixHash = crypto
         .createHash('md5')
-        .update(url)
+        .update(hashInput)
         .digest('hex')
         .substring(0, 6);
-    return `com.pake.${postFixHash}`;
+    return `com.pake.a${postFixHash}`;
+}
+function resolveIdentifier(url, explicitName, customIdentifier) {
+    const trimmedIdentifier = customIdentifier?.trim();
+    if (trimmedIdentifier) {
+        if (!/^[a-zA-Z][a-zA-Z0-9.-]*[a-zA-Z0-9]$/.test(trimmedIdentifier)) {
+            throw new Error(`Invalid identifier "${trimmedIdentifier}". Must start with a letter, ` +
+                `contain only letters, digits, hyphens, and dots, and end with a letter or digit.`);
+        }
+        return trimmedIdentifier;
+    }
+    return getIdentifier(url, explicitName);
 }
 async function promptText(message, initial) {
     const response = await prompts({
@@ -484,7 +499,7 @@ async function mergeConfig(url, options, tauriConf) {
             await fsExtra.copy(sourcePath, destPath);
         }
     }));
-    const { width, height, fullscreen, maximize, hideTitleBar, alwaysOnTop, appVersion, darkMode, disabledWebShortcuts, activationShortcut, userAgent, showSystemTray, systemTrayIcon, useLocalFile, identifier, name = 'pake-app', resizable = true, inject, proxyUrl, installerLanguage, hideOnClose, incognito, title, wasm, enableDragDrop, multiInstance, multiWindow, startToTray, forceInternalNavigation, internalUrlRegex, zoom, minWidth, minHeight, ignoreCertificateErrors, newWindow, } = options;
+    const { width, height, fullscreen, maximize, hideTitleBar, alwaysOnTop, appVersion, darkMode, disabledWebShortcuts, activationShortcut, userAgent, showSystemTray, systemTrayIcon, useLocalFile, identifier, name = 'pake-app', resizable = true, inject, proxyUrl, installerLanguage, hideOnClose, incognito, title, wasm, enableDragDrop, multiInstance, multiWindow, startToTray, forceInternalNavigation, internalUrlRegex, zoom, minWidth, minHeight, ignoreCertificateErrors, newWindow, camera, microphone, } = options;
     const { platform } = process;
     const platformHideOnClose = hideOnClose ?? platform === 'darwin';
     const tauriConfWindowOptions = {
@@ -739,6 +754,26 @@ Terminal=false
             },
         };
     }
+    // Write entitlements dynamically on macOS so camera/microphone are opt-in
+    if (platform === 'darwin') {
+        const entitlementEntries = [];
+        if (camera) {
+            entitlementEntries.push('    <key>com.apple.security.device.camera</key>\n    <true/>');
+        }
+        if (microphone) {
+            entitlementEntries.push('    <key>com.apple.security.device.audio-input</key>\n    <true/>');
+        }
+        const entitlementsContent = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+${entitlementEntries.join('\n')}
+  </dict>
+</plist>
+`;
+        const entitlementsPath = path.join(npmDirectory, 'src-tauri', 'entitlements.plist');
+        await fsExtra.writeFile(entitlementsPath, entitlementsContent);
+    }
     // Save config file.
     const platformConfigPaths = {
         win32: 'tauri.windows.conf.json',
@@ -962,6 +997,27 @@ class BaseBuilder {
             const binaryPath = this.getRawBinaryPath(name);
             logger.success('✔ Raw binary located in', path.resolve(binaryPath));
         }
+        if (IS_MAC && fileType === 'app' && this.options.install) {
+            await this.installAppToApplications(distPath, name);
+        }
+    }
+    async installAppToApplications(appBundlePath, appName) {
+        try {
+            logger.info(`- Installing ${appName} to /Applications...`);
+            const appBundleName = path.basename(appBundlePath);
+            const appDest = path.join('/Applications', appBundleName);
+            if (await fsExtra.pathExists(appDest)) {
+                logger.warn(`  Existing ${appBundleName} in /Applications will be replaced.`);
+            }
+            // fsExtra.move uses fs.rename (atomic on same filesystem) and falls back
+            // to copy+remove only when moving across volumes.
+            await fsExtra.move(appBundlePath, appDest, { overwrite: true });
+            logger.success(`✔ ${appBundleName.replace(/\.app$/, '')} installed to /Applications`);
+        }
+        catch (error) {
+            logger.error(`✕ Failed to install ${appName}: ${error}`);
+            logger.info(`  App bundle still available at: ${appBundlePath}`);
+        }
     }
     getFileType(target) {
         return target;
@@ -1162,7 +1218,9 @@ class MacBuilder extends BaseBuilder {
         this.buildArch = validArchs.includes(options.targets || '')
             ? options.targets
             : 'auto';
-        if (options.iterativeBuild || process.env.PAKE_CREATE_APP === '1') {
+        if (options.iterativeBuild ||
+            options.install ||
+            process.env.PAKE_CREATE_APP === '1') {
             this.buildFormat = 'app';
         }
         else {
@@ -1805,17 +1863,34 @@ function generateIconServiceUrls(domain) {
     ];
 }
 /**
+ * Generates dashboard-icons URLs for an app name.
+ * Uses walkxcode/dashboard-icons as a final fallback for selfhosted apps.
+ * Keeps matching conservative to avoid overriding valid site-specific icons.
+ */
+function generateDashboardIconUrls(appName) {
+    const baseUrl = 'https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png';
+    const name = appName.toLowerCase().trim();
+    const slugs = new Set();
+    // Exact name
+    slugs.add(name);
+    // Replace spaces with hyphens
+    slugs.add(name.replace(/\s+/g, '-'));
+    return [...slugs]
+        .filter((s) => s.length > 0)
+        .map((slug) => `${baseUrl}/${slug}.png`);
+}
+/**
  * Attempts to fetch favicon from website
  */
 async function tryGetFavicon(url, appName) {
     try {
         const domain = new URL(url).hostname;
         const spinner = getSpinner(`Fetching icon from ${domain}...`);
-        const serviceUrls = generateIconServiceUrls(domain);
         const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
         const downloadTimeout = isCI
             ? ICON_CONFIG.downloadTimeout.ci
             : ICON_CONFIG.downloadTimeout.default;
+        const serviceUrls = generateIconServiceUrls(domain);
         for (const serviceUrl of serviceUrls) {
             try {
                 const faviconPath = await downloadIcon(serviceUrl, false, downloadTimeout);
@@ -1833,6 +1908,30 @@ async function tryGetFavicon(url, appName) {
                     logger.debug(`Icon service ${serviceUrl} failed: ${error.message}`);
                 }
                 continue;
+            }
+        }
+        // Final fallback for selfhosted apps behind auth where domain-based
+        // services cannot access the site favicon.
+        if (appName) {
+            const dashboardIconUrls = generateDashboardIconUrls(appName);
+            for (const iconUrl of dashboardIconUrls) {
+                try {
+                    const iconPath = await downloadIcon(iconUrl, false, downloadTimeout);
+                    if (!iconPath)
+                        continue;
+                    const convertedPath = await convertIconFormat(iconPath, appName);
+                    if (convertedPath) {
+                        const finalPath = await copyWindowsIconIfNeeded(convertedPath, appName);
+                        spinner.succeed(chalk.green(`Icon found via dashboard-icons fallback for "${appName}"!`));
+                        return finalPath;
+                    }
+                }
+                catch (error) {
+                    if (error instanceof Error) {
+                        logger.debug(`Dashboard icon ${iconUrl} failed: ${error.message}`);
+                    }
+                    continue;
+                }
             }
         }
         spinner.warn(`No favicon found for ${domain}. Using default.`);
@@ -1992,10 +2091,11 @@ async function handleOptions(options, url) {
             process.exit(1);
         }
     }
+    const resolvedName = name || 'pake-app';
     const appOptions = {
         ...options,
-        name,
-        identifier: getIdentifier(url),
+        name: resolvedName,
+        identifier: resolveIdentifier(url, options.name, options.identifier),
     };
     const iconPath = await handleIcon(appOptions, url);
     appOptions.icon = iconPath || '';
@@ -2051,6 +2151,9 @@ const DEFAULT_PAKE_OPTIONS = {
     minHeight: 0,
     ignoreCertificateErrors: false,
     newWindow: false,
+    install: false,
+    camera: false,
+    microphone: false,
 };
 
 function validateNumberInput(value) {
@@ -2090,6 +2193,7 @@ ${green('|_|   \\__,_|_|\\_\\___|  can turn any webpage into a desktop app with 
         .showHelpAfterError()
         .argument('[url]', 'The web URL you want to package', validateUrlInput)
         .option('--name <string>', 'Application name')
+        .addOption(new Option('--identifier <string>', 'Application identifier / bundle ID').hideHelp())
         .option('--icon <string>', 'Application icon', DEFAULT_PAKE_OPTIONS.icon)
         .option('--width <number>', 'Window width', validateNumberInput, DEFAULT_PAKE_OPTIONS.width)
         .option('--height <number>', 'Window height', validateNumberInput, DEFAULT_PAKE_OPTIONS.height)
@@ -2207,8 +2311,15 @@ ${green('|_|   \\__,_|_|\\_\\___|  can turn any webpage into a desktop app with 
         .addOption(new Option('--iterative-build', 'Turn on rapid build mode (app only, no dmg/deb/msi), good for debugging')
         .default(DEFAULT_PAKE_OPTIONS.iterativeBuild)
         .hideHelp())
-        .addOption(new Option('--new-window', 'Allow new window for third-party login')
+        .addOption(new Option('--new-window', 'Allow sites to open new windows (for auth flows, tabs, branches)')
         .default(DEFAULT_PAKE_OPTIONS.newWindow)
+        .hideHelp())
+        .option('--install', 'Auto-install app to /Applications (macOS) after build and remove local bundle', DEFAULT_PAKE_OPTIONS.install)
+        .addOption(new Option('--camera', 'Request camera permission on macOS')
+        .default(DEFAULT_PAKE_OPTIONS.camera)
+        .hideHelp())
+        .addOption(new Option('--microphone', 'Request microphone permission on macOS')
+        .default(DEFAULT_PAKE_OPTIONS.microphone)
         .hideHelp())
         .version(packageJson.version, '-v, --version')
         .configureHelp({
