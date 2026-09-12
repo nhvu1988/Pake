@@ -1,0 +1,262 @@
+name: Build Single Windows App
+
+env:
+  NODE_VERSION: "22.11.0"
+  PNPM_VERSION: "9.14.4"
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "Application Name"
+        required: true
+      url:
+        description: "Application URL"
+        required: true
+      icon:
+        description: "Icon URL (Optional)"
+        required: false
+      always_on_top:
+        description: "Set window always on top"
+        required: false
+        type: boolean
+        default: false
+      open_last_url:
+        description: "Open last URL at startup"
+        required: false
+        type: boolean
+        default: false
+      fullscreen:
+        description: "Fullscreen at startup"
+        required: false
+        type: boolean
+        default: false
+      width:
+        description: "Window Width"
+        required: false
+        default: "1200"
+      height:
+        description: "Window Height"
+        required: false
+        default: "780"
+      user_agent:
+        description: "User Agent (Optional)"
+        required: false
+      inject_js_base64:
+        description: "Inject (base64) JS content (optional)"
+        required: false
+      inject_css_base64:
+        description: "Inject (base64) CSS content (optional)"
+        required: false
+      inject_js_url:
+        description: "Inject JS file from URL (optional)"
+        required: false
+      inject_css_url:
+        description: "Inject CSS file from URL (optional)"
+        required: false
+      debug:
+        description: "Enable debug mode"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    name: Build ${{ inputs.name }} (Windows x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable-x86_64-msvc
+
+      - name: Setup Node.js Environment
+        uses: ./.github/actions/setup-env
+        with:
+          mode: node
+
+      - name: Get Pake version
+        id: pake_version
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Pake version: $VERSION"
+
+      - name: Rust cache restore
+        uses: actions/cache/restore@v4.2.0
+        id: rust_cache
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build pake-cli
+        shell: bash
+        run: |
+          echo "Building pake-cli..."
+          pnpm run cli:build
+
+          # Verify build output
+          if [ ! -f "dist/cli.js" ]; then
+            echo "Error: Failed to build pake-cli"
+            exit 1
+          fi
+
+          echo "pake-cli built successfully"
+
+      - name: Prepare inject files
+        if: inputs.inject_js_base64 != '' || inputs.inject_css_base64 != '' || inputs.inject_js_url != '' || inputs.inject_css_url != ''
+        shell: pwsh
+        env:
+          INJECT_JS_BASE64: ${{ inputs.inject_js_base64 }}
+          INJECT_CSS_BASE64: ${{ inputs.inject_css_base64 }}
+          INJECT_JS_URL: ${{ inputs.inject_js_url }}
+          INJECT_CSS_URL: ${{ inputs.inject_css_url }}
+        run: |
+          Write-Host "Preparing inject files..."
+          $injectDir = "inject_files"
+          New-Item -Path $injectDir -ItemType Directory -Force | Out-Null
+
+          # Handle JS file from base64
+          if ($env:INJECT_JS_BASE64 -ne "") {
+            Write-Host "Decoding base64 JS content..."
+            $jsBytes = [System.Convert]::FromBase64String($env:INJECT_JS_BASE64)
+            [System.IO.File]::WriteAllBytes("$injectDir\inject.js", $jsBytes)
+            Write-Host "Created inject.js from base64 ($($jsBytes.Length) bytes)"
+          }
+          # Handle JS file from URL
+          elseif ($env:INJECT_JS_URL -ne "") {
+            Write-Host "Downloading JS file from URL..."
+            Invoke-WebRequest -Uri $env:INJECT_JS_URL -OutFile "$injectDir\inject.js"
+            Write-Host "Downloaded inject.js from $($env:INJECT_JS_URL)"
+          }
+
+          # Handle CSS file from base64
+          if ($env:INJECT_CSS_BASE64 -ne "") {
+            Write-Host "Decoding base64 CSS content..."
+            $cssBytes = [System.Convert]::FromBase64String($env:INJECT_CSS_BASE64)
+            [System.IO.File]::WriteAllBytes("$injectDir\inject.css", $cssBytes)
+            Write-Host "Created inject.css from base64 ($($cssBytes.Length) bytes)"
+          }
+          # Handle CSS file from URL
+          elseif ($env:INJECT_CSS_URL -ne "") {
+            Write-Host "Downloading CSS file from URL..."
+            Invoke-WebRequest -Uri $env:INJECT_CSS_URL -OutFile "$injectDir\inject.css"
+            Write-Host "Downloaded inject.css from $($env:INJECT_CSS_URL)"
+          }
+
+          Write-Host "Inject files prepared in $injectDir"
+
+      - name: Build app with pake-cli
+        timeout-minutes: 20
+        shell: pwsh
+        env:
+          APP_NAME: ${{ inputs.name }}
+          APP_URL: ${{ inputs.url }}
+          APP_WIDTH: ${{ inputs.width }}
+          APP_HEIGHT: ${{ inputs.height }}
+          APP_FULLSCREEN: ${{ inputs.fullscreen }}
+          APP_ALWAYS_ON_TOP: ${{ inputs.always_on_top }}
+          APP_OPEN_LAST_URL: ${{ inputs.open_last_url }}
+          APP_USER_AGENT: ${{ inputs.user_agent }}
+          APP_ICON: ${{ inputs.icon }}
+          APP_DEBUG: ${{ inputs.debug }}
+          APP_VERSION: ${{ steps.pake_version.outputs.version }}
+        run: |
+          Write-Host "Building $env:APP_NAME..."
+          Write-Host "Version: $env:APP_VERSION"
+
+          New-Item -Path 'output' -ItemType Directory -Force | Out-Null
+
+          $args = @('dist/cli.js', $env:APP_URL, '--name', $env:APP_NAME, '--width', $env:APP_WIDTH, '--height', $env:APP_HEIGHT, '--app-version', $env:APP_VERSION, '--enable-drag-drop', '--keep-binary')
+
+          if ($env:APP_FULLSCREEN -eq "true") {
+            $args += '--fullscreen'
+          }
+
+          if ($env:APP_ALWAYS_ON_TOP -eq "true") {
+            $args += '--always-on-top'
+          }
+
+          if ($env:APP_OPEN_LAST_URL -eq "true") {
+            $args += '--open-last-url'
+          }
+
+          if ($env:APP_USER_AGENT -ne "") {
+            $args += @('--user-agent', $env:APP_USER_AGENT)
+          }
+
+          if ($env:APP_ICON -ne "") {
+            $args += @('--icon', $env:APP_ICON)
+          }
+
+          if ($env:APP_DEBUG -eq "true") {
+            $args += '--debug'
+          }
+
+          $injectDir = "inject_files"
+          if (Test-Path "$injectDir\inject.js") {
+            $args += @('--inject', "$injectDir\inject.js")
+          }
+          if (Test-Path "$injectDir\inject.css") {
+            $args += @('--inject', "$injectDir\inject.css")
+          }
+
+          Write-Host 'Running: node ' + ($args -join ' ')
+          & node @args
+
+          # find newest exe
+          $exe = Get-ChildItem -Path '.' -Filter '*.exe' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $exe) {
+            Write-Error "No .exe produced for $name"
+            exit 1
+          }
+
+          $destName = "$name.exe"
+          Copy-Item -Path $exe.FullName -Destination "output\\$destName" -Force
+          Write-Host "Copied $($exe.Name) -> output\\$destName"
+          Remove-Item -Path $exe.FullName -Force
+
+          $msi = Get-ChildItem -Path '.' -Filter '*.msi' -ErrorAction SilentlyContinue
+          if ($msi) {
+            Remove-Item -Path $msi.FullName -Force
+          }
+
+      - name: List output artifacts
+        shell: pwsh
+        run: |
+          Write-Host "Output files:"
+          if (Test-Path output) {
+            Get-ChildItem -Path output -File | ForEach-Object { Write-Host $_.FullName }
+          } else {
+            Write-Error "No output directory found"
+            exit 1
+          }
+
+      - name: Rust cache store
+        uses: actions/cache/save@v4.2.0
+        if: steps.rust_cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            src-tauri/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.name }}-windows-x64
+          path: output/*.exe
+          retention-days: 30
