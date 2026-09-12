@@ -1,0 +1,72 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    # Check every 6 hours
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: Sync from upstream
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: git remote add upstream https://github.com/tw93/Pake.git
+
+      - name: Fetch upstream
+        run: git fetch upstream main
+
+      - name: Check for new upstream commits
+        id: check
+        run: |
+          LOCAL=$(git rev-parse origin/main)
+          UPSTREAM=$(git rev-parse upstream/main)
+          if [ "$LOCAL" = "$UPSTREAM" ]; then
+            echo "up_to_date=true" >> $GITHUB_OUTPUT
+            echo "Already up to date"
+          else
+            NEW_COMMITS=$(git log --oneline origin/main..upstream/main | wc -l)
+            echo "up_to_date=false" >> $GITHUB_OUTPUT
+            echo "$NEW_COMMITS new upstream commits"
+          fi
+
+      - name: Sync main branch
+        if: steps.check.outputs.up_to_date == 'false'
+        run: |
+          git checkout main
+          git reset --hard upstream/main
+          git push origin main --force
+
+      - name: Rebase main-develop
+        id: rebase
+        if: steps.check.outputs.up_to_date == 'false'
+        run: |
+          git checkout main-develop
+          if git rebase main; then
+            git push origin main-develop --force
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            git rebase --abort
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "::warning::Rebase failed due to conflicts. Manual resolution needed."
+          fi
+
+      - name: Trigger Build Common Windows Apps
+        if: steps.check.outputs.up_to_date == 'false' && steps.rebase.outputs.success == 'true'
+        run: |
+          gh workflow run "Build Common Windows Apps" --ref main-develop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
